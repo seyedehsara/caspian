@@ -3,15 +3,17 @@ import Foundation
 
 /// Colours for the globe, as plain RGBA so the renderer stays Sendable.
 struct GlobePalette: Sendable {
-    var ocean    = (r: 0.07, g: 0.11, b: 0.20, a: 1.0)
-    var land     = (r: 0.93, g: 0.89, b: 0.80, a: 1.0)     // countries you can play
-    var inactive = (r: 0.42, g: 0.46, b: 0.54, a: 1.0)     // countries with no quiz yet
-    var border   = (r: 0.47, g: 0.43, b: 0.37, a: 0.9)
-    var inactiveBorder = (r: 0.30, g: 0.33, b: 0.40, a: 0.9)
-    var selected = (r: 0.98, g: 0.45, b: 0.36, a: 1.0)
-    var selectedBorder = (r: 1.0, g: 0.85, b: 0.78, a: 1.0)
-    var discovered = (r: 0.99, g: 0.80, b: 0.38, a: 1.0)     // unlocked countries glow gold
-    var discoveredBorder = (r: 0.80, g: 0.58, b: 0.15, a: 1.0)
+    // Caspian palette: deep blue ocean, cream playable land, muted blue-grey elsewhere,
+    // yellow for unlocked countries, terracotta for the one you tapped.
+    var ocean    = (r: 0.24, g: 0.47, b: 0.56, a: 1.0)     // blue-teal, clearly lighter than the sky
+    var land     = (r: 0.97, g: 0.94, b: 0.89, a: 1.0)     // countries you can play
+    var inactive = (r: 0.55, g: 0.68, b: 0.72, a: 1.0)     // countries with no quiz yet
+    var border   = (r: 0.60, g: 0.54, b: 0.45, a: 0.9)
+    var inactiveBorder = (r: 0.34, g: 0.50, b: 0.56, a: 0.9)
+    var selected = (r: 0.78, g: 0.37, b: 0.25, a: 1.0)     // #C85E3F
+    var selectedBorder = (r: 0.98, g: 0.86, b: 0.78, a: 1.0)
+    var discovered = (r: 0.94, g: 0.78, b: 0.27, a: 1.0)   // #F0C745, unlocked countries glow
+    var discoveredBorder = (r: 0.74, g: 0.58, b: 0.12, a: 1.0)
 }
 
 /// Paints every country onto an equirectangular image (the classic flat world map),

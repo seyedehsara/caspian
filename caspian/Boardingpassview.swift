@@ -3,23 +3,26 @@ import SwiftUI
 /// The ticket that appears after the plane lands on a country.
 struct BoardingPassView: View {
     let flight: Flight
-    /// Title of the main button. nil = this country has no game content yet.
-    var actionTitle: String? = nil
-    var onAction: () -> Void = {}
+    /// Titles of the buttons. nil for both = this country has no game content yet.
+    var primaryTitle: String? = nil         // e.g. "Play quiz"
+    var secondaryTitle: String? = nil       // e.g. "Monuments"
+    var onPrimary: () -> Void = {}
+    var onSecondary: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @State private var appeared = false
     @State private var perforationY: CGFloat = 0
 
-    private let paper = Color(red: 0.99, green: 0.97, blue: 0.93)
-    private let ink = Color(red: 0.12, green: 0.13, blue: 0.18)
-    private let accent = Color(red: 0.98, green: 0.45, blue: 0.36)
+    private let paper = Color(hex: 0xFCF9F4)
+    private let ink = Color(hex: 0x2B3A52)
+    private let accent = Theme.terracotta
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.05, green: 0.07, blue: 0.16),
-                                    Color(red: 0.10, green: 0.12, blue: 0.26)],
+            LinearGradient(colors: [Theme.nightTop, Theme.nightBottom],
                            startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+            StarField(count: 60)
                 .ignoresSafeArea()
 
             ticket
@@ -53,6 +56,7 @@ struct BoardingPassView: View {
                     airport(code: flight.from?.id ?? "HOME",
                             name: flight.from?.name ?? "Your home",
                             flag: flight.from?.flag ?? "🏠",
+                            countryID: flight.from?.id,
                             alignment: .leading)
                     Spacer()
                     VStack(spacing: 4) {
@@ -65,6 +69,7 @@ struct BoardingPassView: View {
                     airport(code: flight.to.id,
                             name: flight.to.name,
                             flag: flight.to.flag,
+                            countryID: flight.to.id,
                             alignment: .trailing)
                 }
 
@@ -86,18 +91,35 @@ struct BoardingPassView: View {
             VStack(spacing: 16) {
                 barcode
                     .frame(height: 48)
-                if let actionTitle {
-                    Button {
-                        onAction()
-                        dismiss()
-                    } label: {
-                        Text(actionTitle)
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                if primaryTitle != nil || secondaryTitle != nil {
+                    HStack(spacing: 12) {
+                        if let secondaryTitle {
+                            Button {
+                                onSecondary()
+                                dismiss()
+                            } label: {
+                                Label(secondaryTitle, systemImage: "building.columns")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(ink)
+                        }
+                        if let primaryTitle {
+                            Button {
+                                onPrimary()
+                                dismiss()
+                            } label: {
+                                Label(primaryTitle, systemImage: "play.fill")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(accent)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
                 } else {
                     Label("\(flight.to.name) is coming soon", systemImage: "clock")
                         .font(.subheadline.weight(.semibold))
@@ -119,9 +141,9 @@ struct BoardingPassView: View {
         .accessibilityLabel("Boarding pass to \(flight.to.name)")
     }
 
-    private func airport(code: String, name: String, flag: String, alignment: HorizontalAlignment) -> some View {
+    private func airport(code: String, name: String, flag: String, countryID: String?, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 2) {
-            Text(flag).font(.system(size: 34))
+            FlagView(emoji: flag, countryID: countryID, size: 34)
             Text(code)
                 .font(.system(size: 34, weight: .heavy, design: .rounded))
                 .lineLimit(1)

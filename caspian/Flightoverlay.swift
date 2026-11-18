@@ -87,7 +87,7 @@ struct FlightOverlay: View {
         GeometryReader { geo in
             ZStack {
                 FlightTrail(progress: progress)
-                    .stroke(.white.opacity(0.7),
+                    .stroke(Theme.yellow.opacity(0.85),
                             style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 9]))
 
                 Image(systemName: "airplane")

@@ -27,7 +27,7 @@ final class GlobeHolder {
     }
 
     /// Smoothly turns the globe so the given coordinate faces the viewer.
-    func fly(to coordinate: Coordinate, duration: TimeInterval) {
+    func turn(to coordinate: Coordinate, duration: TimeInterval) {
         guard let globe else { return }
         let targetYaw = -Float(coordinate.lon) * .pi / 180
         let targetPitch = Float(coordinate.lat) * .pi / 180
@@ -69,8 +69,9 @@ struct GlobeView: View {
     @Binding var selected: Country?
     var discovered: Set<String> = []
 
-    /// How long the globe takes to turn towards a tapped country. Keep in sync with the plane animation.
-    static let flightDuration: TimeInterval = 1.6
+    /// Duration of the globe's turn towards the selected country. Keep in sync with the plane animation.
+    static let turnDuration: TimeInterval = 1.6
+    static var flightDuration: TimeInterval { turnDuration }
 
     @State private var holder = GlobeHolder()
     private let renderer = GlobeTextureRenderer()
@@ -94,7 +95,7 @@ struct GlobeView: View {
             // .virtual stops iOS from showing the device camera feed behind the globe (AR mode).
             content.camera = .virtual
             let camera = PerspectiveCamera()
-            camera.position = [0, 0, 3.4]
+            camera.position = [0, 0, 3.0]
             content.add(camera)
             #endif
 
@@ -104,9 +105,14 @@ struct GlobeView: View {
         }
         .gesture(tap)
         .gesture(drag)
+        // Turn towards the selection however it was made: a tap, a chip, or the end of a quiz.
+        .onChange(of: selected) { _, country in
+            guard let country else { return }
+            holder.turn(to: country.centroid, duration: Self.turnDuration)
+        }
         .sensoryFeedback(.selection, trigger: selected)
         .accessibilityLabel("Interactive globe")
-        .accessibilityHint("Drag to rotate, tap a country to fly there")
+        .accessibilityHint("Drag to rotate, or tap a country to select it")
     }
 
     private var drag: some Gesture {
@@ -139,9 +145,11 @@ struct GlobeView: View {
                 #endif
                 let (lat, lon) = GlobeMesh.latLon(for: local)
                 let country = store.country(atLat: lat, lon: lon)
+                let wasAlreadySelected = country?.id == selected?.id
                 selected = country
-                if let country {
-                    holder.fly(to: country.centroid, duration: Self.flightDuration)
+                // A repeated tap doesn't change the binding, but can still re-aim after a drag.
+                if wasAlreadySelected, let country {
+                    holder.turn(to: country.centroid, duration: Self.turnDuration)
                 }
             }
     }
