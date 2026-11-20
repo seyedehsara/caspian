@@ -39,10 +39,15 @@ final class GlobeHolder {
         pitch = targetPitch
 
         globe.stopAllAnimations()
-        globe.move(to: Transform(scale: .one, rotation: orientation, translation: .zero),
-                   relativeTo: globe.parent,
-                   duration: duration,
-                   timingFunction: .easeInOut)
+        let target = Transform(scale: .one, rotation: orientation, translation: .zero)
+        if duration <= 0 {
+            globe.transform = target
+        } else {
+            globe.move(to: target,
+                       relativeTo: globe.parent,
+                       duration: duration,
+                       timingFunction: .easeInOut)
+        }
     }
 
     /// Repaints the globe texture when the selected country changes.
@@ -66,11 +71,13 @@ final class GlobeHolder {
 
 struct GlobeView: View {
     @Environment(CountryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selected: Country?
     var discovered: Set<String> = []
 
-    /// Duration of the globe's turn towards the selected country.
-    static let turnDuration: TimeInterval = 1.6
+    /// Country previews finish sooner; the plane keeps its own, separate flight timing.
+    static let turnDuration: TimeInterval = 1.25
+    static let flightDuration: TimeInterval = 1.6
 
     @State private var holder = GlobeHolder()
     private let renderer = GlobeTextureRenderer()
@@ -104,9 +111,10 @@ struct GlobeView: View {
         }
         .gesture(tap)
         .gesture(drag)
+        // Turn towards the selection however it was made: a tap, a chip, or the end of a quiz.
         .onChange(of: selected) { _, country in
             guard let country else { return }
-            holder.turn(to: country.centroid, duration: Self.turnDuration)
+            holder.turn(to: country.centroid, duration: reduceMotion ? 0 : Self.turnDuration)
         }
         .sensoryFeedback(.selection, trigger: selected)
         .accessibilityLabel("Interactive globe")
@@ -147,7 +155,7 @@ struct GlobeView: View {
                 selected = country
                 // A repeated tap doesn't change the binding, but can still re-aim after a drag.
                 if wasAlreadySelected, let country {
-                    holder.turn(to: country.centroid, duration: Self.turnDuration)
+                    holder.turn(to: country.centroid, duration: reduceMotion ? 0 : Self.turnDuration)
                 }
             }
     }

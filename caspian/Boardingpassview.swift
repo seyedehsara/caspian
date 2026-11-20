@@ -3,41 +3,93 @@ import SwiftUI
 /// The ticket that appears after the plane lands on a country.
 struct BoardingPassView: View {
     let flight: Flight
-    /// Title of the main button. nil = this country has no game content yet.
-    var actionTitle: String? = nil
-    var onAction: () -> Void = {}
+    /// Titles of the buttons. nil for both = this country has no game content yet.
+    var primaryTitle: String? = nil         // e.g. "Play quiz"
+    var secondaryTitle: String? = nil       // e.g. "Monuments"
+    var onPrimary: () -> Void = {}
+    var onSecondary: () -> Void = {}
+    var onClose: () -> Void = {}
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
     @State private var perforationY: CGFloat = 0
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDismissing = false
 
-    private let paper = Color(red: 0.99, green: 0.97, blue: 0.93)
-    private let ink = Color(red: 0.12, green: 0.13, blue: 0.18)
-    private let accent = Color(red: 0.98, green: 0.45, blue: 0.36)
+    private let paper = Color(hex: 0xFCF9F4)
+    private let ink = Color(hex: 0x2B3A52)
+    private let accent = Theme.terracotta
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.05, green: 0.07, blue: 0.16),
-                                    Color(red: 0.10, green: 0.12, blue: 0.26)],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            let panelHeight = geometry.size.height * 0.65
 
-            ticket
-                .frame(maxWidth: 420)
-                .padding(24)
-                .offset(y: appeared ? 0 : 400)
-                .rotationEffect(.degrees(appeared ? 0 : -4))
-                .onAppear {
-                    withAnimation(.spring(duration: 0.7, bounce: 0.25)) { appeared = true }
-                }
+            ZStack(alignment: .bottom) {
+                Color.clear.ignoresSafeArea()
+                Rectangle()
+                    .fill(paper)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 24)
+
+                ticket(compact: geometry.size.height < 700)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: panelHeight)
+                    .offset(y: (appeared || reduceMotion ? 0 : panelHeight) + dragOffset)
+                    .gesture(
+                        DragGesture(minimumDistance: 8)
+                            .onChanged { value in
+                                guard !isDismissing, value.translation.height > 0 else { return }
+                                dragOffset = value.translation.height
+                            }
+                            .onEnded { value in
+                                guard !isDismissing else { return }
+                                let threshold = max(100, geometry.size.height * 0.15)
+                                if value.translation.height > threshold || value.predictedEndTranslation.height > threshold * 1.5 {
+                                    isDismissing = true
+                                    withAnimation(reduceMotion ? nil : .easeIn(duration: 0.18)) {
+                                        dragOffset = panelHeight
+                                    }
+                                    Task { @MainActor in
+                                        try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 180))
+                                        onClose()
+                                    }
+                                } else {
+                                    withAnimation(reduceMotion ? nil : .spring(duration: 0.28, bounce: 0.12)) {
+                                        dragOffset = 0
+                                    }
+                                }
+                            }
+                    )
+                    .allowsHitTesting(!isDismissing)
+                    .onAppear {
+                        guard !reduceMotion else {
+                            appeared = true
+                            return
+                        }
+                        withAnimation(.spring(duration: 0.5, bounce: 0.18)) { appeared = true }
+                    }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea(edges: .bottom)
         .sensoryFeedback(.impact(weight: .light), trigger: appeared)
     }
 
-    private var ticket: some View {
+    private func ticket(compact: Bool) -> some View {
         VStack(spacing: 0) {
+            Button(action: onClose) {
+                Capsule()
+                    .fill(ink.opacity(0.28))
+                    .frame(width: 42, height: 5)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close boarding pass")
+            .accessibilityHint("Swipe down to return to the destination menu")
+
             // Main part
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: compact ? 12 : 22) {
                 HStack {
                     Label("CASPIAN AIR", systemImage: "airplane.departure")
                         .font(.caption.weight(.bold))
@@ -53,6 +105,7 @@ struct BoardingPassView: View {
                     airport(code: flight.from?.id ?? "HOME",
                             name: flight.from?.name ?? "Your home",
                             flag: flight.from?.flag ?? "🏠",
+                            countryID: flight.from?.id,
                             alignment: .leading)
                     Spacer()
                     VStack(spacing: 4) {
@@ -65,6 +118,7 @@ struct BoardingPassView: View {
                     airport(code: flight.to.id,
                             name: flight.to.name,
                             flag: flight.to.flag,
+                            countryID: flight.to.id,
                             alignment: .trailing)
                 }
 
@@ -78,26 +132,44 @@ struct BoardingPassView: View {
                     field("SEAT", "1A")
                 }
             }
-            .padding(24)
+            .padding(compact ? 18 : 24)
 
             perforation
+                .padding(.horizontal, compact ? 18 : 24)
 
             // Tear-off stub
-            VStack(spacing: 16) {
+            VStack(spacing: compact ? 10 : 16) {
                 barcode
-                    .frame(height: 48)
-                if let actionTitle {
-                    Button {
-                        onAction()
-                        dismiss()
-                    } label: {
-                        Text(actionTitle)
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                    .frame(height: compact ? 34 : 48)
+                if primaryTitle != nil || secondaryTitle != nil {
+                    HStack(spacing: 12) {
+                        if let primaryTitle {
+                            Button {
+                                onPrimary()
+                                onClose()
+                            } label: {
+                                Label(primaryTitle, systemImage: "play.fill")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(accent)
+                        }
+                        if let secondaryTitle {
+                            Button {
+                                onSecondary()
+                                onClose()
+                            } label: {
+                                Label(secondaryTitle, systemImage: "building.columns")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(ink)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
                 } else {
                     Label("\(flight.to.name) is coming soon", systemImage: "clock")
                         .font(.subheadline.weight(.semibold))
@@ -105,9 +177,10 @@ struct BoardingPassView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
             }
-            .padding(24)
+            .padding(compact ? 18 : 24)
         }
         .foregroundStyle(ink)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .coordinateSpace(name: "ticket")
         .onPreferenceChange(PerforationYKey.self) { y in
             Task { @MainActor in perforationY = y }
@@ -119,9 +192,9 @@ struct BoardingPassView: View {
         .accessibilityLabel("Boarding pass to \(flight.to.name)")
     }
 
-    private func airport(code: String, name: String, flag: String, alignment: HorizontalAlignment) -> some View {
+    private func airport(code: String, name: String, flag: String, countryID: String?, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 2) {
-            Text(flag).font(.system(size: 34))
+            FlagView(emoji: flag, countryID: countryID, size: 34)
             Text(code)
                 .font(.system(size: 34, weight: .heavy, design: .rounded))
                 .lineLimit(1)
@@ -149,7 +222,6 @@ struct BoardingPassView: View {
         Line()
             .stroke(.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 6]))
             .frame(height: 1)
-            .padding(.horizontal, 24)
             // Report where the perforation is, so the notches in TicketShape line up with it.
             .background {
                 GeometryReader { g in

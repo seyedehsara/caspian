@@ -42,7 +42,7 @@ struct OnboardingView: View {
     private var welcomePage: some View {
         VStack(spacing: 28) {
             VStack(spacing: -6) {
-                Text("Caspian")
+                Text("Stamp.")
                     .font(.system(size: 56, weight: .heavy, design: .rounded))
                     .foregroundStyle(Theme.primary)
                 Image(systemName: "face.smiling")
@@ -80,7 +80,7 @@ struct OnboardingView: View {
                 .font(.system(size: 120))
                 .offset(y: floating ? -6 : 6)
             VStack(spacing: 10) {
-                Text("Welcome to Caspian!")
+                Text("Welcome to Stamp.")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .foregroundStyle(Theme.ink)
                 Text("Guess where each photo comes from. Every right answer unlocks that country on your globe.")
