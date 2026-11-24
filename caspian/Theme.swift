@@ -222,7 +222,7 @@ struct FlagView: View {
             Image(name)
                 .resizable()
                 .scaledToFit()
-                .frame(width: size * 1.35, height: size * 0.95)
+                .frame(width: size, height: size)
                 .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
                 .accessibilityLabel("Flag")
         } else {
