@@ -6,6 +6,7 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page = 0
     @State private var floating = false
+    @ScaledMetric(relativeTo: .largeTitle) private var brandFontSize: CGFloat = 56
 
     var body: some View {
         ZStack {
@@ -16,13 +17,14 @@ struct OnboardingView: View {
                 Group {
                     if page == 0 { welcomePage } else { mascotPage }
                 }
-                .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                        removal: .move(edge: .leading).combined(with: .opacity)))
+                .transition(reduceMotion ? .opacity : .asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)))
                 Spacer()
 
                 Button(page == 0 ? "Get Started" : "Let's go") {
                     if page == 0 {
-                        withAnimation(.spring(duration: 0.5)) { page = 1 }
+                        withAnimation(reduceMotion ? nil : .spring(duration: 0.5)) { page = 1 }
                     } else {
                         progress.hasOnboarded = true
                     }
@@ -42,8 +44,8 @@ struct OnboardingView: View {
     private var welcomePage: some View {
         VStack(spacing: 28) {
             VStack(spacing: -6) {
-                Text("Caspian")
-                    .font(.system(size: 56, weight: .heavy, design: .rounded))
+                Text("Stamp.")
+                    .font(.system(size: brandFontSize, weight: .heavy, design: .rounded))
                     .foregroundStyle(Theme.primary)
                 Image(systemName: "face.smiling")
                     .font(.title)
@@ -80,7 +82,7 @@ struct OnboardingView: View {
                 .font(.system(size: 120))
                 .offset(y: floating ? -6 : 6)
             VStack(spacing: 10) {
-                Text("Welcome to Caspian!")
+                Text("Welcome to Stamp.")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .foregroundStyle(Theme.ink)
                 Text("Guess where each photo comes from. Every right answer unlocks that country on your globe.")

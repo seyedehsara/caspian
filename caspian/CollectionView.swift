@@ -13,7 +13,7 @@ struct CollectionView: View {
                 SoftBackground(tint: Theme.mint)
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(ContentLibrary.answerCountries) { country in
+                        ForEach(ContentLibrary.playableCountries) { country in
                             let unlocked = progress.isDiscovered(country.id)
                             Button {
                                 browsing = country

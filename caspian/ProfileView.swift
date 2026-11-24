@@ -4,7 +4,7 @@ struct ProfileView: View {
     @Environment(ProgressStore.self) private var progress
     @State private var confirmReset = false
 
-    private var total: Int { ContentLibrary.answerCountries.count }
+    private var total: Int { ContentLibrary.playableCountries.count }
     private var discovered: [QuizCountry] {
         progress.discovered.compactMap { ContentLibrary.country($0) }
     }
@@ -68,7 +68,7 @@ struct ProfileView: View {
                                 .font(.system(.title3, design: .rounded, weight: .bold))
                                 .foregroundStyle(Theme.ink)
                             if discovered.isEmpty {
-                                Text("Press Play on the globe and guess where each photo comes from to start your collection.")
+                                Text("Choose a destination and tap Explore Now to start a quiz and grow your collection.")
                                     .font(.subheadline)
                                     .foregroundStyle(Theme.ink.opacity(0.6))
                                     .padding(.vertical, 8)

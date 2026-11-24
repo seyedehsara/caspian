@@ -23,7 +23,7 @@ struct GlobeTextureRenderer: Sendable {
     var height = 2048
     var palette = GlobePalette()
     /// Countries that have quiz content. Everything else is drawn grey.
-    var playableIDs: Set<String> = Set(ContentLibrary.answerCountries.map(\.id))
+    var playableIDs: Set<String> = Set(ContentLibrary.playableCountries.map(\.id))
 
     func render(countries: [Country], selectedID: String?, discoveredIDs: Set<String> = []) -> CGImage? {
         guard let ctx = CGContext(

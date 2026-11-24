@@ -108,14 +108,30 @@ enum ContentLibrary {
 
     static func country(_ id: String) -> QuizCountry? { countries.first { $0.id == id } }
 
-    /// Countries that can be unlocked (they have at least one question).
+    /// The countries switched on in the game right now. Everything else in this file stays
+    /// written but hidden: to bring a country back, add its id here.
+    static let activeCountryIDs: [String] = ["IRN", "ITA", "EGY", "RUS", "MEX"]
+
+    static func isActive(_ countryID: String) -> Bool { activeCountryIDs.contains(countryID) }
+
+    /// World-quiz questions about active countries only.
+    static var activeQuestions: [QuizQuestion] { questions.filter { isActive($0.answerID) } }
+
+    /// Countries that can be unlocked (active, with at least one world question).
     static var answerCountries: [QuizCountry] {
-        let ids = Set(questions.map(\.answerID))
-        return countries.filter { ids.contains($0.id) }
+        let ids = Set(activeQuestions.map(\.answerID))
+        return activeCountryIDs.compactMap { id in countries.first { $0.id == id && ids.contains(id) } }
+    }
+
+    /// Active countries playable through either a world question or a country-specific quiz,
+    /// in the order of `activeCountryIDs`.
+    static var playableCountries: [QuizCountry] {
+        let ids = Set(activeQuestions.map(\.answerID)).union(countryQuestions.map(\.countryID))
+        return activeCountryIDs.compactMap { id in countries.first { $0.id == id && ids.contains(id) } }
     }
 
     static func questions(about countryID: String) -> [QuizQuestion] {
-        questions.filter { $0.answerID == countryID }
+        activeQuestions.filter { $0.answerID == countryID }
     }
 
     /// The photo used to represent a country in the collection.
@@ -125,7 +141,7 @@ enum ContentLibrary {
 
     /// Builds a random session. If `focus` is given, one question about that country goes first.
     static func makeSession(focus: String? = nil) -> QuizSession {
-        var pool = questions.shuffled()
+        var pool = activeQuestions.shuffled()
         var picked: [QuizQuestion] = []
         if let focus, let first = pool.first(where: { $0.answerID == focus }) {
             picked.append(first)
@@ -143,13 +159,13 @@ enum ContentLibrary {
 
     /// Builds a quiz about one country: four varied questions in random order.
     static func makeCountrySession(for country: QuizCountry) -> QuizSession {
-        let qs = countryQuestions.filter { $0.countryID == country.id }.shuffled()
+        let qs = countryQuestions.filter { isActive(country.id) && $0.countryID == country.id }.shuffled()
         return QuizSession(mode: .country(country),
                            questions: Array(qs.prefix(countryQuizLength)).map(\.asQuestion))
     }
 
     static func hasCountryQuiz(_ countryID: String) -> Bool {
-        countryQuestions.contains { $0.countryID == countryID }
+        isActive(countryID) && countryQuestions.contains { $0.countryID == countryID }
     }
 
     // MARK: Countries (answers and distractors)

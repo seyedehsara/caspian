@@ -10,6 +10,7 @@ struct QuizSessionView: View {
 
     @Environment(ProgressStore.self) private var progress
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Step: Hashable {
         case question(Int)
@@ -55,8 +56,9 @@ struct QuizSessionView: View {
                 }
             }
             .id(step)
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)))
+            .transition(reduceMotion ? .opacity : .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)))
         }
         .safeAreaInset(edge: .top) { topBar }
         .sensoryFeedback(.impact(weight: .light), trigger: step)
@@ -88,7 +90,7 @@ struct QuizSessionView: View {
     }
 
     private func advance(to next: Step) {
-        withAnimation(.spring(duration: 0.45)) { step = next }
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.45)) { step = next }
     }
 
     /// Close button and progress (HIG: always offer a way out).
@@ -100,9 +102,10 @@ struct QuizSessionView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.inkOnPaper)
                     .frame(width: 44, height: 44)
-                    .background(Theme.card, in: Circle())
-                    .shadow(color: .black.opacity(0.06), radius: 8, y: 4)
+                    .background(Theme.paper, in: Circle())
+                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Leave the quiz")
@@ -114,14 +117,14 @@ struct QuizSessionView: View {
                     FlagView(emoji: country.flag, countryID: country.id, size: 16)
                     Text(country.name).font(.subheadline.weight(.semibold))
                 }
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.snow)
                 Spacer()
             }
 
             if let index = currentIndex {
                 Text("\(index + 1) / \(questions.count)")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.ink.opacity(0.6))
+                    .foregroundStyle(Theme.snowMuted)
                     .accessibilityLabel("Question \(index + 1) of \(questions.count)")
             }
         }
@@ -140,10 +143,10 @@ struct QuizSessionView: View {
     private var background: some View {
         switch step {
         case .result(let i, let chosenID):
-            // Correct answers wash the screen teal, wrong ones terracotta, both kept soft.
-            SoftBackground(tint: chosenID == questions[i].correctID ? Theme.teal.opacity(0.55) : Theme.terracotta.opacity(0.45))
+            // The same sky as the globe, with a teal glow for a right answer and terracotta for a wrong one.
+            NightSky(glow: chosenID == questions[i].correctID ? Theme.teal : Theme.terracotta)
         default:
-            SoftBackground(tint: Theme.lavender)
+            NightSky()
         }
     }
 }
@@ -158,26 +161,31 @@ struct QuestionView: View {
     @State private var pickedID: String?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Text(question.prompt)
-                    .font(.system(.title2, design: .rounded, weight: .semibold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Theme.ink)
-                    .padding(.horizontal, 28)
-                    .padding(.top, 12)
-                    .fixedSize(horizontal: false, vertical: true)
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Equal flexible gaps above the question and above the answers keep the page balanced.
+                    Spacer(minLength: 8)
 
-                if let art = question.art {
-                    IllustrationView(art: art, emojiSize: 110)
-                        .aspectRatio(question.options.count > 2 ? 4 / 3 : 1, contentMode: .fit)
-                        .frame(maxWidth: 320)
-                        .clipShape(RoundedRectangle(cornerRadius: 32))
-                        .shadow(color: .black.opacity(0.10), radius: 24, y: 12)
-                        .padding(.horizontal, 32)
-                }
+                    Text(question.prompt)
+                        .font(.system(.title2, design: .rounded, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Theme.snow)
+                        .padding(.horizontal, 28)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                VStack(spacing: 12) {
+                    if let art = question.art {
+                        IllustrationView(art: art, emojiSize: 110)
+                            .aspectRatio(question.options.count > 2 ? 4 / 3 : 1, contentMode: .fit)
+                            .frame(maxWidth: 320)
+                            .clipShape(RoundedRectangle(cornerRadius: 32))
+                            .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
+                            .padding(.horizontal, 32)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    VStack(spacing: 16) {
                     ForEach(question.options) { option in
                         Button {
                             guard pickedID == nil else { return }
@@ -194,34 +202,37 @@ struct QuestionView: View {
                         .accessibilityLabel(option.title)
                     }
                 }
-                .padding(.horizontal, 32)
-                .frame(maxWidth: 440)
-                .padding(.bottom, 24)
+                    .padding(.horizontal, 32)
+                    .frame(maxWidth: 440)
+                    .padding(.bottom, 44)
+                }
+                .frame(maxWidth: .infinity, minHeight: geo.size.height)
             }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
     }
 }
 
 struct OptionLabel: View {
     let option: Question.Option
     let isPicked: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 10) {
             if let flag = option.flag { FlagView(emoji: flag, countryID: option.countryID, size: 20) }
             Text(option.title)
                 .font(.headline)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.inkOnPaper)
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, minHeight: 56)
-        .background(Theme.card, in: Capsule())
-        .overlay(Capsule().stroke(Theme.primary, lineWidth: isPicked ? 3 : 0))
-        .shadow(color: .black.opacity(0.07), radius: 12, y: 6)
-        .scaleEffect(isPicked ? 1.03 : 1)
-        .animation(.spring(duration: 0.3), value: isPicked)
+        .frame(maxWidth: .infinity, minHeight: 60)
+        .background(Theme.paper, in: Capsule())
+        .overlay(Capsule().stroke(Theme.yellow, lineWidth: isPicked ? 3 : 0))
+        .shadow(color: .black.opacity(0.25), radius: 14, y: 8)
+        .scaleEffect(!reduceMotion && isPicked ? 1.03 : 1)
+        .animation(reduceMotion ? nil : .spring(duration: 0.3), value: isPicked)
         .contentShape(Capsule())
     }
 }
@@ -258,8 +269,8 @@ struct AnswerResultView: View {
 
             VStack(spacing: 10) {
                 Text(isCorrect ? "Correct!" : "Not quite")
-                    .font(.system(size: 40, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.ink)
+                    .font(.system(.largeTitle, design: .rounded, weight: .heavy))
+                    .foregroundStyle(Theme.snow)
                 if let correctOption {
                     HStack(spacing: 8) {
                         if let flag = correctOption.flag { FlagView(emoji: flag, countryID: correctOption.countryID, size: 22) }
@@ -267,13 +278,13 @@ struct AnswerResultView: View {
                     }
                     .font(.title3.weight(.semibold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(Theme.ink.opacity(0.75))
+                    .foregroundStyle(Theme.snowMuted)
                     .padding(.horizontal, 24)
                 }
                 if newlyUnlocked, let country {
                     Label("\(country.name) unlocked on your globe", systemImage: "lock.open.fill")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(Theme.inkOnPaper)
                         .padding(.vertical, 8).padding(.horizontal, 14)
                         .background(Theme.gold.opacity(0.3), in: Capsule())
                 }
@@ -283,10 +294,10 @@ struct AnswerResultView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Did you know?", systemImage: "lightbulb.fill")
                         .font(.headline)
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(Theme.inkOnPaper)
                     Text(question.fact)
                         .font(.subheadline)
-                        .foregroundStyle(Theme.ink.opacity(0.75))
+                        .foregroundStyle(Theme.inkOnPaper.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let art = question.art {
@@ -297,8 +308,8 @@ struct AnswerResultView: View {
             }
             .padding(20)
             .frame(maxWidth: 520)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-            .shadow(color: .black.opacity(0.06), radius: 16, y: 8)
+            .background(Theme.paper, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+            .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
             .padding(.horizontal, 24)
 
             Spacer(minLength: 0)
@@ -306,12 +317,12 @@ struct AnswerResultView: View {
             Button(action: onNext) {
                 Label("Next", systemImage: "play.fill")
             }
-            .buttonStyle(PrimaryButtonStyle(tint: isCorrect ? Theme.primary : Theme.ink))
+            .buttonStyle(PrimaryButtonStyle(tint: isCorrect ? Theme.blue : Theme.terracotta))
             .frame(maxWidth: 420)
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
         }
-        .onAppear { withAnimation(.spring(duration: 0.6, bounce: 0.4)) { shown = true } }
+        .onAppear { withAnimation(reduceMotion ? nil : .spring(duration: 0.6, bounce: 0.4)) { shown = true } }
     }
 }
 
@@ -349,13 +360,13 @@ struct SessionSummaryView: View {
             Spacer()
 
             Text(title)
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
+                .font(.system(.largeTitle, design: .rounded, weight: .heavy))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.snow)
 
             ZStack {
                 if !unlocked.isEmpty && !reduceMotion { SparkleBurst() }
-                Circle().fill(Theme.sky).frame(width: 200, height: 200)
+                Circle().fill(Theme.snow.opacity(0.14)).frame(width: 200, height: 200)
                 if case .country(let c) = mode {
                     FlagView(emoji: c.flag, countryID: c.id, size: 90)
                         .saturation(unlocked.isEmpty ? 0.3 : 1)
@@ -377,13 +388,13 @@ struct SessionSummaryView: View {
                 Text(subtitle)
                     .font(.title3.weight(.semibold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(Theme.ink.opacity(0.75))
+                    .foregroundStyle(Theme.snowMuted)
                     .padding(.horizontal, 24)
                 Label("+\(points) points", systemImage: "star.fill")
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.inkOnPaper)
                     .padding(.vertical, 10).padding(.horizontal, 18)
-                    .background(Theme.gold.opacity(0.25), in: Capsule())
+                    .background(Theme.yellow, in: Capsule())
             }
 
             Spacer()
@@ -394,7 +405,7 @@ struct SessionSummaryView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
         }
-        .onAppear { withAnimation(.spring(duration: 0.7, bounce: 0.35)) { shown = true } }
+        .onAppear { withAnimation(reduceMotion ? nil : .spring(duration: 0.7, bounce: 0.35)) { shown = true } }
     }
 
     private var isCountryMode: Bool {
@@ -472,6 +483,7 @@ struct LandmarkGalleryView: View {
     let country: QuizCountry
     let landmarks: [Landmark]
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var index = 0
 
     var body: some View {
@@ -517,7 +529,7 @@ struct LandmarkGalleryView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
             }
-            .animation(.spring(duration: 0.4), value: index)
+            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: index)
         }
     }
 

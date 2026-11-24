@@ -19,6 +19,8 @@ enum Theme {
 
     // Roles
     static let primary   = Color(light: blue, dark: Color(hex: 0x8DA8D2))
+    // A darker blue reserved for white text on filled controls, with stronger contrast in both appearances.
+    static let primaryButton = Color(light: Color(hex: 0x4A6D9B), dark: Color(hex: 0x425F8B))
     static let ink       = Color(light: Color(hex: 0x2B3A52), dark: Color(hex: 0xEEF1F6))   // blue pushed to near-black
     static let cream     = Color(light: Color(hex: 0xFBF8F5), dark: Color(hex: 0x141A26))
     static let card      = Color(light: .white, dark: Color(hex: 0x1F2838))
@@ -46,7 +48,29 @@ enum Theme {
     static let nightBottom = Color(hex: 0x173836)
     static let nightGlow   = Color(hex: 0x74A7A1)
 
+    // Fixed colours for things drawn on the night sky (same in light and dark mode).
+    static let snow        = Color(hex: 0xFBF8F5)   // text on the sky
+    static let snowMuted   = Color(hex: 0xB9CFCB)   // secondary text on the sky
+    static let paper       = Color(hex: 0xFFFFFF)   // cards on the sky
+    static let inkOnPaper  = Color(hex: 0x2B3A52)   // text on those cards
+
     static let cardRadius: CGFloat = 24
+}
+
+/// The globe's night sky with stars, reusable behind any screen. Optional tinted glow.
+struct NightSky: View {
+    var glow: Color? = nil
+
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Theme.nightTop, Theme.nightBottom], startPoint: .top, endPoint: .bottom)
+            StarField(count: 90)
+            if let glow {
+                RadialGradient(colors: [glow.opacity(0.45), .clear], center: .top, startRadius: 0, endRadius: 520)
+            }
+        }
+        .ignoresSafeArea()
+    }
 }
 
 /// Twinkling stars. Each star has its own size, speed and phase, so they never blink in step.
@@ -174,7 +198,8 @@ extension Color {
 
 /// The big blue pill button used everywhere (HIG: at least 44pt tall, clear label, obvious primary action).
 struct PrimaryButtonStyle: ButtonStyle {
-    var tint: Color = Theme.primary
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var tint: Color = Theme.primaryButton
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -183,8 +208,8 @@ struct PrimaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 54)
             .background(tint, in: Capsule())
             .shadow(color: tint.opacity(configuration.isPressed ? 0.1 : 0.4), radius: 16, y: 8)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1)
+            .animation(reduceMotion ? nil : .spring(duration: 0.25), value: configuration.isPressed)
     }
 }
 
@@ -222,7 +247,7 @@ struct FlagView: View {
             Image(name)
                 .resizable()
                 .scaledToFit()
-                .frame(width: size * 1.35, height: size * 0.95)
+                .frame(width: size, height: size)
                 .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
                 .accessibilityLabel("Flag")
         } else {
