@@ -13,17 +13,16 @@ struct CollectionView: View {
                 SoftBackground(tint: Theme.mint)
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(ContentLibrary.answerCountries) { country in
+                        ForEach(ContentLibrary.playableCountries) { country in
                             let unlocked = progress.isDiscovered(country.id)
                             Button {
-                                if unlocked { browsing = country }
+                                browsing = country
                             } label: {
                                 CollectionTile(country: country, unlocked: unlocked)
                             }
                             .buttonStyle(.plain)
-                            .disabled(!unlocked)
                             .accessibilityLabel(unlocked ? "\(country.name), unlocked" : "\(country.name), locked")
-                            .accessibilityHint(unlocked ? "Shows the landmarks" : "Answer a question about it to unlock")
+                            .accessibilityHint("Shows the monuments")
                         }
                     }
                     .padding(20)
@@ -33,19 +32,8 @@ struct CollectionView: View {
             }
             .navigationTitle("Collection")
             .sheet(item: $browsing) { country in
-                NavigationStack {
-                    ZStack {
-                        SoftBackground()
-                        LandmarkGalleryView(country: country, landmarks: ContentLibrary.landmarks[country.id] ?? [])
-                    }
-                    .navigationTitle(country.name)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { browsing = nil }
-                        }
-                    }
-                }
-                .presentationDetents([.large])
+                CountryGuideView(country: country)
+                    .presentationDetents([.large])
             }
         }
     }
@@ -72,7 +60,7 @@ struct CollectionTile: View {
                     }
                 }
             HStack(spacing: 6) {
-                Text(country.flag)
+                FlagView(emoji: country.flag, countryID: country.id, size: 16)
                 Text(country.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.ink)
