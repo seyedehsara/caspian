@@ -11,11 +11,7 @@ struct GlobeScreen: View {
 
     @State private var selected: Country?
     @State private var destinationID = GlobeScreen.shuffleID
-    @State private var isBrowsingManually = false
-    @State private var isPickerExpanded = false
-    @State private var pickerIdleTask: Task<Void, Never>?
     @State private var destinationChangeTask: Task<Void, Never>?
-    @State private var suppressAutomaticTicket = false
     @State private var isTurningToSelection = false
 
     @State private var flight: Flight?
@@ -31,11 +27,6 @@ struct GlobeScreen: View {
     @State private var visiting: QuizCountry?
 
     @ScaledMetric(relativeTo: .body) private var compactPickerHeight: CGFloat = 116
-    @ScaledMetric(relativeTo: .body) private var expandedPickerHeight: CGFloat = 194
-
-    private var pickerHeight: CGFloat {
-        isPickerExpanded ? expandedPickerHeight : compactPickerHeight
-    }
 
     var body: some View {
         ZStack {
@@ -100,6 +91,11 @@ struct GlobeScreen: View {
                 if selected != nil { selected = nil }
                 return
             }
+            // Choosing a destination only previews it. Explore Now starts the flight.
+            guard !isFlying else {
+                isTurningToSelection = false
+                return
+            }
 
             // Wait for the native wheel to settle before starting a country preview.
             isTurningToSelection = true
@@ -111,12 +107,6 @@ struct GlobeScreen: View {
                     return
                 }
 
-                if suppressAutomaticTicket {
-                    suppressAutomaticTicket = false
-                    isTurningToSelection = false
-                    return
-                }
-
                 if selected?.id != id { selected = country }
                 try? await Task.sleep(for: .seconds(reduceMotion ? 0 : GlobeView.turnDuration))
                 guard !Task.isCancelled, destinationID == id,
@@ -124,9 +114,6 @@ struct GlobeScreen: View {
 
                 isTurningToSelection = false
                 shuffleSession = nil
-                let trip = Flight(from: lastDestination, to: country)
-                lastDestination = country
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { ticket = trip }
             }
         }
 
@@ -179,17 +166,32 @@ struct GlobeScreen: View {
 
     // MARK: Journey
 
-    /// Explore Now is active in Shuffle mode. The plane animation is independent of country selection.
+    /// Explore Now starts a flight to the selected country, or picks a random one in Shuffle mode.
     private func startJourney() {
-        guard destinationID == Self.shuffleID, !isFlying, !isTurningToSelection else { return }
+        guard canExplore, !isFlying, !isTurningToSelection else { return }
         destinationChangeTask?.cancel()
 
-        let next = ContentLibrary.makeSession()
-        guard let firstID = next.questions.first?.countryID,
-              let destination = store.countries.first(where: { $0.id == firstID }) else { return }
+        let quizCountry: QuizCountry
+        if destinationID == Self.shuffleID {
+            // Shuffle chooses one playable country first, then builds the entire
+            // session from that country's quiz instead of mixing the world pool.
+            let quizCountries = ContentLibrary.playableCountries.filter {
+                ContentLibrary.hasCountryQuiz($0.id)
+            }
+            guard let randomCountry = quizCountries.randomElement() else { return }
+            quizCountry = randomCountry
+        } else {
+            guard let chosenCountry = ContentLibrary.country(destinationID),
+                  ContentLibrary.hasCountryQuiz(chosenCountry.id) else { return }
+            quizCountry = chosenCountry
+        }
 
-        shuffleSession = next
-        suppressAutomaticTicket = true
+        guard let destination = store.countries.first(where: { $0.id == quizCountry.id }) else { return }
+
+        let next = ContentLibrary.makeCountrySession(for: quizCountry)
+        guard !next.questions.isEmpty else { return }
+
+        shuffleSession = destinationID == Self.shuffleID ? next : nil
         destinationID = destination.id
         selected = destination
         startFlight(to: destination)
@@ -237,7 +239,6 @@ struct GlobeScreen: View {
         if wasShuffle {
             destinationID = Self.shuffleID
             selected = nil
-            isBrowsingManually = false
         }
     }
 
@@ -245,7 +246,6 @@ struct GlobeScreen: View {
     private func sessionFinished(unlocked: [String]) {
         guard let id = unlocked.last, let country = store.countries.first(where: { $0.id == id }) else { return }
         guard country != selected else { return }
-        suppressAutomaticTicket = true
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(400))
             selected = country
@@ -284,8 +284,7 @@ struct GlobeScreen: View {
         .tint(.white.opacity(0.76))
         .environment(\.colorScheme, .dark)
         .labelsHidden()
-        .frame(height: pickerHeight)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isPickerExpanded)
+        .frame(height: compactPickerHeight)
         .mask {
             LinearGradient(stops: [
                 .init(color: .clear, location: 0),
@@ -297,38 +296,26 @@ struct GlobeScreen: View {
         .background(.clear)
         .disabled(isFlying)
         .accessibilityLabel("Destination")
-        .accessibilityHint("Choose Shuffle for a random game or select a country to turn the globe and open its ticket")
+        .accessibilityHint("Choose Shuffle for a random country or select a country to preview it. Tap Explore Now to start")
         .frame(maxWidth: 440)
     }
 
-    /// Only direct wheel interaction hides the Shuffle action; code-driven destination updates do not.
     private var pickerSelection: Binding<String> {
         Binding(
             get: { destinationID },
             set: { newID in
-                pickerIdleTask?.cancel()
-                if newID == Self.shuffleID {
-                    // Keep the wheel expanded until scrolling settles. Resizing it
-                    // while the native picker is moving can make it snap back.
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                        isBrowsingManually = false
-                    }
-                    pickerIdleTask = Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        guard !Task.isCancelled, destinationID == Self.shuffleID else { return }
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                            isPickerExpanded = false
-                        }
-                    }
-                } else {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                        isBrowsingManually = true
-                        isPickerExpanded = true
-                    }
-                }
                 destinationID = newID
             }
         )
+    }
+
+    private var canExplore: Bool {
+        if destinationID == Self.shuffleID {
+            return ContentLibrary.playableCountries.contains {
+                ContentLibrary.hasCountryQuiz($0.id)
+            }
+        }
+        return ContentLibrary.hasCountryQuiz(destinationID)
     }
 
     private var bottomBar: some View {
@@ -339,25 +326,16 @@ struct GlobeScreen: View {
             }
 
             if store.isLoaded {
-                ZStack {
-                    if isBrowsingManually {
-                        Color.clear
-                            .accessibilityHidden(true)
-                    } else {
-                        Button(action: startJourney) {
-                            Label("Explore Now", systemImage: "airplane.departure")
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(destinationID != Self.shuffleID || isFlying || isTurningToSelection)
-                        .accessibilityHint(destinationID == Self.shuffleID
-                                           ? "Starts a random game"
-                                           : "The selected country will open after the globe finishes turning")
-                        .transition(.opacity)
-                    }
+                Button(action: startJourney) {
+                    Label("Explore Now", systemImage: "airplane.departure")
                 }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!canExplore || isFlying || isTurningToSelection)
+                .accessibilityHint(destinationID == Self.shuffleID
+                                   ? "Starts a game in a random country"
+                                   : "Starts a game in the selected country")
                 .frame(maxWidth: 480)
                 .frame(height: 54)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: isBrowsingManually)
             }
         }
         .padding(.horizontal, 16)
