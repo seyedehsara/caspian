@@ -10,6 +10,7 @@ struct QuizSessionView: View {
 
     @Environment(ProgressStore.self) private var progress
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Step: Hashable {
         case question(Int)
@@ -55,8 +56,9 @@ struct QuizSessionView: View {
                 }
             }
             .id(step)
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)))
+            .transition(reduceMotion ? .opacity : .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)))
         }
         .safeAreaInset(edge: .top) { topBar }
         .sensoryFeedback(.impact(weight: .light), trigger: step)
@@ -88,7 +90,7 @@ struct QuizSessionView: View {
     }
 
     private func advance(to next: Step) {
-        withAnimation(.spring(duration: 0.45)) { step = next }
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.45)) { step = next }
     }
 
     /// Close button and progress (HIG: always offer a way out).
@@ -206,6 +208,7 @@ struct QuestionView: View {
 struct OptionLabel: View {
     let option: Question.Option
     let isPicked: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 10) {
@@ -220,8 +223,8 @@ struct OptionLabel: View {
         .background(Theme.card, in: Capsule())
         .overlay(Capsule().stroke(Theme.primary, lineWidth: isPicked ? 3 : 0))
         .shadow(color: .black.opacity(0.07), radius: 12, y: 6)
-        .scaleEffect(isPicked ? 1.03 : 1)
-        .animation(.spring(duration: 0.3), value: isPicked)
+        .scaleEffect(!reduceMotion && isPicked ? 1.03 : 1)
+        .animation(reduceMotion ? nil : .spring(duration: 0.3), value: isPicked)
         .contentShape(Capsule())
     }
 }
@@ -258,7 +261,7 @@ struct AnswerResultView: View {
 
             VStack(spacing: 10) {
                 Text(isCorrect ? "Correct!" : "Not quite")
-                    .font(.system(size: 40, weight: .heavy, design: .rounded))
+                    .font(.system(.largeTitle, design: .rounded, weight: .heavy))
                     .foregroundStyle(Theme.ink)
                 if let correctOption {
                     HStack(spacing: 8) {
@@ -306,12 +309,12 @@ struct AnswerResultView: View {
             Button(action: onNext) {
                 Label("Next", systemImage: "play.fill")
             }
-            .buttonStyle(PrimaryButtonStyle(tint: isCorrect ? Theme.primary : Theme.ink))
+            .buttonStyle(PrimaryButtonStyle())
             .frame(maxWidth: 420)
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
         }
-        .onAppear { withAnimation(.spring(duration: 0.6, bounce: 0.4)) { shown = true } }
+        .onAppear { withAnimation(reduceMotion ? nil : .spring(duration: 0.6, bounce: 0.4)) { shown = true } }
     }
 }
 
@@ -349,7 +352,7 @@ struct SessionSummaryView: View {
             Spacer()
 
             Text(title)
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
+                .font(.system(.largeTitle, design: .rounded, weight: .heavy))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.ink)
 
@@ -394,7 +397,7 @@ struct SessionSummaryView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
         }
-        .onAppear { withAnimation(.spring(duration: 0.7, bounce: 0.35)) { shown = true } }
+        .onAppear { withAnimation(reduceMotion ? nil : .spring(duration: 0.7, bounce: 0.35)) { shown = true } }
     }
 
     private var isCountryMode: Bool {
@@ -472,6 +475,7 @@ struct LandmarkGalleryView: View {
     let country: QuizCountry
     let landmarks: [Landmark]
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var index = 0
 
     var body: some View {
@@ -517,7 +521,7 @@ struct LandmarkGalleryView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
             }
-            .animation(.spring(duration: 0.4), value: index)
+            .animation(reduceMotion ? nil : .spring(duration: 0.4), value: index)
         }
     }
 

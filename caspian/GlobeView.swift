@@ -200,8 +200,28 @@ struct GlobeView: View {
         }
         .onDisappear { holder.stopMotion() }
         .sensoryFeedback(.selection, trigger: selected)
+        .accessibilityElement()
         .accessibilityLabel("Interactive globe")
-        .accessibilityHint("Drag to rotate, or tap a country to select it. The globe turns gently while no destination is selected")
+        .accessibilityValue(selected?.name ?? "No destination selected")
+        .accessibilityHint("Swipe up or down to cycle destinations, or use the destination picker")
+        .accessibilityAdjustableAction { direction in
+            let playableIDs = Set(ContentLibrary.playableCountries.map(\.id))
+            let options = store.countries.filter { playableIDs.contains($0.id) }.sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+            guard !options.isEmpty else { return }
+            let currentIndex = options.firstIndex(where: { $0.id == selected?.id })
+            switch direction {
+            case .increment:
+                let nextIndex = currentIndex.map { ($0 + 1) % options.count } ?? 0
+                selected = options[nextIndex]
+            case .decrement:
+                let previousIndex = currentIndex.map { ($0 - 1 + options.count) % options.count } ?? options.count - 1
+                selected = options[previousIndex]
+            @unknown default:
+                break
+            }
+        }
     }
 
     private var drag: some Gesture {

@@ -19,6 +19,8 @@ enum Theme {
 
     // Roles
     static let primary   = Color(light: blue, dark: Color(hex: 0x8DA8D2))
+    // A darker blue reserved for white text on filled controls, with stronger contrast in both appearances.
+    static let primaryButton = Color(light: Color(hex: 0x4A6D9B), dark: Color(hex: 0x425F8B))
     static let ink       = Color(light: Color(hex: 0x2B3A52), dark: Color(hex: 0xEEF1F6))   // blue pushed to near-black
     static let cream     = Color(light: Color(hex: 0xFBF8F5), dark: Color(hex: 0x141A26))
     static let card      = Color(light: .white, dark: Color(hex: 0x1F2838))
@@ -174,7 +176,8 @@ extension Color {
 
 /// The big blue pill button used everywhere (HIG: at least 44pt tall, clear label, obvious primary action).
 struct PrimaryButtonStyle: ButtonStyle {
-    var tint: Color = Theme.primary
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var tint: Color = Theme.primaryButton
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -183,8 +186,8 @@ struct PrimaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 54)
             .background(tint, in: Capsule())
             .shadow(color: tint.opacity(configuration.isPressed ? 0.1 : 0.4), radius: 16, y: 8)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1)
+            .animation(reduceMotion ? nil : .spring(duration: 0.25), value: configuration.isPressed)
     }
 }
 

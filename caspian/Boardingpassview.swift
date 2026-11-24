@@ -11,6 +11,7 @@ struct BoardingPassView: View {
     var onClose: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .largeTitle) private var airportCodeFontSize: CGFloat = 34
     @State private var appeared = false
     @State private var perforationY: CGFloat = 0
     @State private var dragOffset: CGFloat = 0
@@ -19,6 +20,7 @@ struct BoardingPassView: View {
     private let paper = Color(hex: 0xFCF9F4)
     private let ink = Color(hex: 0x2B3A52)
     private let accent = Theme.terracotta
+    private let actionAccent = Color(hex: 0xA3422D)
 
     var body: some View {
         GeometryReader { geometry in
@@ -151,10 +153,10 @@ struct BoardingPassView: View {
                                 Label(primaryTitle, systemImage: "play.fill")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 6)
+                                    .frame(minHeight: 44)
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(accent)
+                            .tint(actionAccent)
                         }
                         if let secondaryTitle {
                             Button {
@@ -164,7 +166,7 @@ struct BoardingPassView: View {
                                 Label(secondaryTitle, systemImage: "building.columns")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 6)
+                                    .frame(minHeight: 44)
                             }
                             .buttonStyle(.bordered)
                             .tint(ink)
@@ -188,7 +190,7 @@ struct BoardingPassView: View {
         .background { TicketShape(notchY: perforationY).fill(paper, style: FillStyle(eoFill: true)) }
         .clipShape(TicketShape(notchY: perforationY), style: FillStyle(eoFill: true))
         .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Boarding pass to \(flight.to.name)")
     }
 
@@ -196,7 +198,7 @@ struct BoardingPassView: View {
         VStack(alignment: alignment, spacing: 2) {
             FlagView(emoji: flag, countryID: countryID, size: 34)
             Text(code)
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
+                .font(.system(size: airportCodeFontSize, weight: .heavy, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(name)

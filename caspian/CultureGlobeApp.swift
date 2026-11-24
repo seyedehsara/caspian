@@ -16,7 +16,6 @@ struct CultureGlobeApp: App {
                         .transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.4), value: progress.hasOnboarded)
             .environment(store)
             .environment(progress)
             // SF Pro Rounded everywhere, with Dynamic Type still working.
