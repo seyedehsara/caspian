@@ -12,6 +12,12 @@ final class GlobeHolder {
     var pitch: Float = -0.25
     var dragAnchor: (yaw: Float, pitch: Float)?
 
+    private var motionTask: Task<Void, Never>?
+    private var motionGeneration = 0
+    private var isIdleRotating = false
+
+    private static let idleRotationSpeed: Float = 0.008 // radians per second
+
     private var hasApplied = false
     private var lastApplied: String?
     private var lastDiscovered: Set<String> = []
@@ -26,9 +32,77 @@ final class GlobeHolder {
         globe?.orientation = orientation
     }
 
+    func stopMotion() {
+        motionGeneration += 1
+        motionTask?.cancel()
+        motionTask = nil
+        isIdleRotating = false
+    }
+
+    /// A subtle idle spin keeps the unselected globe feeling alive.
+    func startIdleRotation() {
+        guard globe != nil, !isIdleRotating else { return }
+        stopMotion()
+        isIdleRotating = true
+        let generation = motionGeneration
+        motionTask = Task { @MainActor [weak self] in
+            let frameDuration: Float = 1.0 / 60.0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled, let self, self.motionGeneration == generation,
+                      self.globe != nil else { break }
+                self.yaw += Self.idleRotationSpeed * frameDuration
+                self.applyRotation()
+            }
+            guard let self, self.motionGeneration == generation else { return }
+            self.motionTask = nil
+            self.isIdleRotating = false
+        }
+    }
+
+    /// Carries the user's swipe forward and gradually slows it down.
+    func startInertia(velocity initialVelocity: SIMD2<Float>, resumesIdleRotation: Bool) {
+        stopMotion()
+        guard globe != nil else { return }
+
+        var velocity = initialVelocity
+        let speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
+        let maximumSpeed: Float = 2.8
+        if speed > maximumSpeed { velocity *= maximumSpeed / speed }
+        guard speed > 0.04 else {
+            if resumesIdleRotation { startIdleRotation() }
+            return
+        }
+
+        let generation = motionGeneration
+        motionTask = Task { @MainActor [weak self] in
+            let frameDuration: Float = 1.0 / 60.0
+            let friction: Float = 4.2
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled, let self, self.motionGeneration == generation,
+                      self.globe != nil else { break }
+
+                self.yaw += velocity.x * frameDuration
+                let nextPitch = self.pitch + velocity.y * frameDuration
+                self.pitch = max(-1.3, min(1.3, nextPitch))
+                if self.pitch != nextPitch { velocity.y = 0 }
+                self.applyRotation()
+
+                let damping = exp(-friction * frameDuration)
+                velocity *= damping
+                if sqrt(velocity.x * velocity.x + velocity.y * velocity.y) < 0.025 { break }
+            }
+            guard let self, self.motionGeneration == generation else { return }
+            self.motionTask = nil
+            if resumesIdleRotation { self.startIdleRotation() }
+        }
+    }
+
     /// Smoothly turns the globe so the given coordinate faces the viewer.
     func turn(to coordinate: Coordinate, duration: TimeInterval) {
         guard let globe else { return }
+        stopMotion()
         let targetYaw = -Float(coordinate.lon) * .pi / 180
         let targetPitch = Float(coordinate.lat) * .pi / 180
 
@@ -39,10 +113,15 @@ final class GlobeHolder {
         pitch = targetPitch
 
         globe.stopAllAnimations()
-        globe.move(to: Transform(scale: .one, rotation: orientation, translation: .zero),
-                   relativeTo: globe.parent,
-                   duration: duration,
-                   timingFunction: .easeInOut)
+        let target = Transform(scale: .one, rotation: orientation, translation: .zero)
+        if duration <= 0 {
+            globe.transform = target
+        } else {
+            globe.move(to: target,
+                       relativeTo: globe.parent,
+                       duration: duration,
+                       timingFunction: .easeInOut)
+        }
     }
 
     /// Repaints the globe texture when the selected country changes.
@@ -54,7 +133,7 @@ final class GlobeHolder {
         renderTask?.cancel()
         renderTask = Task { [weak self] in
             let image = await Task.detached(priority: .userInitiated) {
-                renderer.render(countries: countries, selectedID: id, discoveredIDs: discovered)
+                await renderer.render(countries: countries, selectedID: id, discoveredIDs: discovered)
             }.value
             guard !Task.isCancelled, let image,
                   let texture = try? await TextureResource(image: image, options: .init(semantic: .color))
@@ -66,11 +145,13 @@ final class GlobeHolder {
 
 struct GlobeView: View {
     @Environment(CountryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selected: Country?
     var discovered: Set<String> = []
 
-    /// Duration of the globe's turn towards the selected country.
-    static let turnDuration: TimeInterval = 1.6
+    /// Country previews finish sooner; the plane keeps its own, separate flight timing.
+    static let turnDuration: TimeInterval = 1.25
+    static let flightDuration: TimeInterval = 1.6
 
     @State private var holder = GlobeHolder()
     private let renderer = GlobeTextureRenderer()
@@ -88,6 +169,7 @@ struct GlobeView: View {
             globe.orientation = holder.orientation
             content.add(globe)
             holder.globe = globe
+            if selected == nil && !reduceMotion { holder.startIdleRotation() }
 
             #if !os(visionOS)
             // On iPhone, iPad and Mac we need our own camera. visionOS uses the real one.
@@ -104,13 +186,42 @@ struct GlobeView: View {
         }
         .gesture(tap)
         .gesture(drag)
+        // Turn towards the selection however it was made: a tap, a chip, or the end of a quiz.
         .onChange(of: selected) { _, country in
-            guard let country else { return }
-            holder.turn(to: country.centroid, duration: Self.turnDuration)
+            guard let country else {
+                if !reduceMotion { holder.startIdleRotation() }
+                return
+            }
+            holder.stopMotion()
+            holder.turn(to: country.centroid, duration: reduceMotion ? 0 : Self.turnDuration)
         }
+        .onAppear {
+            if selected == nil && !reduceMotion { holder.startIdleRotation() }
+        }
+        .onDisappear { holder.stopMotion() }
         .sensoryFeedback(.selection, trigger: selected)
+        .accessibilityElement()
         .accessibilityLabel("Interactive globe")
-        .accessibilityHint("Drag to rotate, or tap a country to select it")
+        .accessibilityValue(selected?.name ?? "No destination selected")
+        .accessibilityHint("Swipe up or down to cycle destinations, or use the destination picker")
+        .accessibilityAdjustableAction { direction in
+            let playableIDs = Set(ContentLibrary.playableCountries.map(\.id))
+            let options = store.countries.filter { playableIDs.contains($0.id) }.sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+            guard !options.isEmpty else { return }
+            let currentIndex = options.firstIndex(where: { $0.id == selected?.id })
+            switch direction {
+            case .increment:
+                let nextIndex = currentIndex.map { ($0 + 1) % options.count } ?? 0
+                selected = options[nextIndex]
+            case .decrement:
+                let previousIndex = currentIndex.map { ($0 - 1 + options.count) % options.count } ?? options.count - 1
+                selected = options[previousIndex]
+            @unknown default:
+                break
+            }
+        }
     }
 
     private var drag: some Gesture {
@@ -118,6 +229,7 @@ struct GlobeView: View {
             .onChanged { value in
                 if holder.dragAnchor == nil {
                     holder.globe?.stopAllAnimations()
+                    holder.stopMotion()
                     holder.dragAnchor = (holder.yaw, holder.pitch)
                 }
                 guard let anchor = holder.dragAnchor else { return }
@@ -126,7 +238,21 @@ struct GlobeView: View {
                 holder.pitch = max(-1.3, min(1.3, anchor.pitch + Float(value.translation.height) * sensitivity))
                 holder.applyRotation()
             }
-            .onEnded { _ in holder.dragAnchor = nil }
+            .onEnded { value in
+                let projected = value.predictedEndTranslation
+                let extra = SIMD2<Float>(
+                    Float(projected.width - value.translation.width),
+                    Float(projected.height - value.translation.height)
+                )
+                let sensitivity: Float = 0.006
+                let projectionWindow: Float = 0.25
+                holder.dragAnchor = nil
+                guard !reduceMotion else { return }
+                holder.startInertia(
+                    velocity: extra * (sensitivity / projectionWindow),
+                    resumesIdleRotation: selected == nil
+                )
+            }
     }
 
     private var tap: some Gesture {
@@ -147,7 +273,7 @@ struct GlobeView: View {
                 selected = country
                 // A repeated tap doesn't change the binding, but can still re-aim after a drag.
                 if wasAlreadySelected, let country {
-                    holder.turn(to: country.centroid, duration: Self.turnDuration)
+                    holder.turn(to: country.centroid, duration: reduceMotion ? 0 : Self.turnDuration)
                 }
             }
     }

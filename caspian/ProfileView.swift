@@ -4,7 +4,7 @@ struct ProfileView: View {
     @Environment(ProgressStore.self) private var progress
     @State private var confirmReset = false
 
-    private var total: Int { ContentLibrary.answerCountries.count }
+    private var total: Int { ContentLibrary.playableCountries.count }
     private var discovered: [QuizCountry] {
         progress.discovered.compactMap { ContentLibrary.country($0) }
     }
@@ -14,7 +14,7 @@ struct ProfileView: View {
 
         NavigationStack {
             ZStack {
-                SoftBackground(tint: Theme.blush)
+                NightSky()
                 ScrollView {
                     VStack(spacing: 24) {
                         // Header
@@ -26,18 +26,18 @@ struct ProfileView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 TextField("Your name", text: $progress.playerName)
                                     .font(.system(.title2, design: .rounded, weight: .bold))
-                                    .foregroundStyle(Theme.ink)
+                                    .foregroundStyle(Theme.snow)
                                     .textFieldStyle(.plain)
                                 Text("Traveler")
                                     .font(.subheadline)
-                                    .foregroundStyle(Theme.ink.opacity(0.6))
+                                    .foregroundStyle(Theme.snowMuted)
                             }
                             Spacer()
                             Label("\(progress.points)", systemImage: "star.fill")
                                 .font(.headline)
-                                .foregroundStyle(Theme.ink)
+                                .foregroundStyle(Theme.inkOnPaper)
                                 .padding(.vertical, 8).padding(.horizontal, 14)
-                                .background(Theme.gold.opacity(0.25), in: Capsule())
+                                .background(Theme.yellow, in: Capsule())
                                 .accessibilityLabel("\(progress.points) points")
                         }
 
@@ -48,47 +48,35 @@ struct ProfileView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Countries discovered")
                                         .font(.subheadline)
-                                        .foregroundStyle(Theme.ink.opacity(0.7))
+                                        .foregroundStyle(Theme.inkOnPaper.opacity(0.7))
                                     Text("\(discovered.count) / \(total)")
                                         .font(.system(.title2, design: .rounded, weight: .bold))
-                                        .foregroundStyle(Theme.ink)
+                                        .foregroundStyle(Theme.inkOnPaper)
                                 }
                             }
                             ProgressView(value: Double(discovered.count), total: Double(total))
-                                .tint(Theme.primary)
+                                .tint(Theme.blue)
                         }
                         .padding(20)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-                        .shadow(color: .black.opacity(0.06), radius: 16, y: 8)
+                        .background(Theme.paper, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+                        .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
 
-                        // Collection preview
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("My Collection")
+                        // The passport, with one page per stamp
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("My Passport")
                                 .font(.system(.title3, design: .rounded, weight: .bold))
-                                .foregroundStyle(Theme.ink)
+                                .foregroundStyle(Theme.snow)
                             if discovered.isEmpty {
-                                Text("Press Play on the globe and guess where each photo comes from to start your collection.")
+                                Text("Choose a destination and tap Explore Now. Pass a quiz and the country is stamped in here.")
                                     .font(.subheadline)
-                                    .foregroundStyle(Theme.ink.opacity(0.6))
-                                    .padding(.vertical, 8)
-                            } else {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 12) {
-                                        ForEach(discovered) { country in
-                                            VStack(spacing: 6) {
-                                                IllustrationView(art: ContentLibrary.signature(for: country.id) ?? Illustration(emoji: country.flag),
-                                                                 emojiSize: 44, fit: true)
-                                                    .frame(width: 100, height: 100)
-                                                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                                                Text(country.name)
-                                                    .font(.caption.weight(.semibold))
-                                                    .foregroundStyle(Theme.ink)
-                                            }
-                                        }
-                                    }
-                                }
+                                    .foregroundStyle(Theme.snowMuted)
+                                    .padding(.vertical, 4)
                             }
+                            PassportBookView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 12)
+                                .padding(.bottom, 8)
                         }
                     }
                     .padding(20)
@@ -97,6 +85,9 @@ struct ProfileView: View {
                 }
             }
             .navigationTitle("Profile")
+            #if os(iOS)
+            .toolbarColorScheme(.dark, for: .navigationBar)   // white title on the night sky
+            #endif
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
